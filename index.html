@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Agriculture Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f2f7f2; margin: 0; padding: 20px; color: #1e3a1e; }
+    h1 { text-align: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; max-width: 1000px; margin: 20px auto; }
+    .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.1); text-align: center; }
+    .card h3 { margin: 0 0 8px; font-size: 15px; color: #4b6b4b; }
+    .value { font-size: 28px; font-weight: bold; }
+    .unit { font-size: 14px; color: #777; }
+    .controls { max-width: 1000px; margin: 20px auto; background: #fff; padding: 16px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+    button { padding: 8px 14px; margin: 4px; border: none; border-radius: 6px; cursor: pointer; background: #2e7d32; color: #fff; }
+    button.secondary { background: #607d8b; }
+    button.active { outline: 3px solid #1b5e20; }
+    .on { color: #2e7d32; }
+    .off { color: #c62828; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { padding: 6px; border-bottom: 1px solid #eee; text-align: center; }
+    #msg { color: #c62828; }
+  </style>
+</head>
+<body>
+  <h1>🌱 Smart Agriculture Dashboard</h1>
+
+  <div class="grid">
+    <div class="card"><h3>Soil Moisture</h3><span class="value" id="soilMoisture">--</span> <span class="unit">%</span></div>
+    <div class="card"><h3>Temperature</h3><span class="value" id="temperature">--</span> <span class="unit">°C</span></div>
+    <div class="card"><h3>Humidity</h3><span class="value" id="humidity">--</span> <span class="unit">%</span></div>
+    <div class="card"><h3>Soil pH</h3><span class="value" id="ph">--</span></div>
+    <div class="card"><h3>Light Level</h3><span class="value" id="lightLevel">--</span> <span class="unit">lux</span></div>
+    <div class="card"><h3>Irrigation</h3><span class="value" id="irrigation">--</span></div>
+  </div>
+
+  <div class="controls">
+    <strong>Mode:</strong> <span id="mode">--</span><br/>
+    <button id="btnAuto" onclick="setMode('auto')">Auto Mode</button>
+    <button id="btnManual" class="secondary" onclick="setMode('manual')">Manual Mode</button>
+    <button id="btnStart" onclick="setManualOn(true)">Start Irrigation</button>
+    <button id="btnStop" class="secondary" onclick="setManualOn(false)">Stop Irrigation</button>
+    <p id="msg"></p>
+    <h3>Recent Readings</h3>
+    <table>
+      <thead><tr><th>Time</th><th>Moisture %</th><th>Temp °C</th><th>Humidity %</th><th>Irrigation</th></tr></thead>
+      <tbody id="history"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // Settings are kept in the browser so the serverless API stays stateless
+    let mode = localStorage.getItem("sa_mode") || "auto";
+    let manualOn = localStorage.getItem("sa_on") === "true";
+
+    function query() {
+      return `mode=${mode}&on=${manualOn}`;
+    }
+
+    function updateButtons() {
+      document.getElementById("mode").textContent = mode;
+      document.getElementById("btnAuto").classList.toggle("active", mode === "auto");
+      document.getElementById("btnManual").classList.toggle("active", mode === "manual");
+      document.getElementById("btnStart").disabled = mode !== "manual";
+      document.getElementById("btnStop").disabled = mode !== "manual";
+    }
+
+    async function refresh() {
+      try {
+        const [s, h] = await Promise.all([
+          fetch("/api/sensors?" + query()).then(r => r.json()),
+          fetch("/api/history?" + query()).then(r => r.json()),
+        ]);
+        document.getElementById("soilMoisture").textContent = s.soilMoisture;
+        document.getElementById("temperature").textContent = s.temperature;
+        document.getElementById("humidity").textContent = s.humidity;
+        document.getElementById("ph").textContent = s.ph;
+        document.getElementById("lightLevel").textContent = s.lightLevel;
+        const irr = document.getElementById("irrigation");
+        irr.textContent = s.irrigationOn ? "ON" : "OFF";
+        irr.className = "value " + (s.irrigationOn ? "on" : "off");
+        document.getElementById("history").innerHTML = h.slice().reverse().slice(0, 10).map(r =>
+          `<tr><td>${new Date(r.timestamp).toLocaleTimeString()}</td><td>${r.soilMoisture}</td>
+           <td>${r.temperature}</td><td>${r.humidity}</td>
+           <td class="${r.irrigationOn ? "on" : "off"}">${r.irrigationOn ? "ON" : "OFF"}</td></tr>`
+        ).join("");
+        document.getElementById("msg").textContent = "";
+      } catch (e) {
+        document.getElementById("msg").textContent = "Data load nahi ho paaya: " + e.message;
+      }
+      updateButtons();
+    }
+
+    function setMode(m) {
+      mode = m;
+      localStorage.setItem("sa_mode", m);
+      refresh();
+    }
+
+    function setManualOn(on) {
+      manualOn = on;
+      localStorage.setItem("sa_on", String(on));
+      refresh();
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

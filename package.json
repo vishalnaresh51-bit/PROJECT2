@@ -1,0 +1,6 @@
+{
+  "name": "smart-agriculture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Agriculture monitoring dashboard (Vercel-ready)"
+}
